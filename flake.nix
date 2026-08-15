@@ -3,6 +3,10 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    home-manager = {
+      url = "github:nix-community/home-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   nixConfig = {
@@ -16,6 +20,7 @@
     {
       self,
       nixpkgs,
+      home-manager,
     }:
     let
       systems = [
@@ -28,6 +33,34 @@
       forAllSystems = nixpkgs.lib.genAttrs systems;
 
       mkPackage = system: (import nixpkgs { inherit system; }).callPackage ./package.nix { };
+
+      # A sample home-manager configuration used by `checks` to validate that
+      # the module (including declarative `settings`) evaluates and builds.
+      exampleHomeConfig =
+        system:
+        home-manager.lib.homeManagerConfiguration {
+          pkgs = import nixpkgs { inherit system; };
+          modules = [
+            self.homeManagerModules.default
+            {
+              home.username = "dsh-test";
+              home.homeDirectory = "/home/dsh-test";
+              home.stateVersion = "25.05";
+              services.deepseek-harness = {
+                enable = true;
+                settings = {
+                  models = {
+                    provider = "deepseek";
+                    apiKey = "DEEPSEEK_API_KEY";
+                  };
+                  telemetry = {
+                    mode = "off";
+                  };
+                };
+              };
+            }
+          ];
+        };
     in
     {
       packages = forAllSystems (
@@ -40,6 +73,10 @@
           deepseek-harness = deepseek-harness;
         }
       );
+
+      checks = forAllSystems (system: {
+        home-config = (exampleHomeConfig system).activationPackage;
+      });
 
       devShells = forAllSystems (
         system:

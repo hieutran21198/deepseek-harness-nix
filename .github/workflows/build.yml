@@ -28,3 +28,6 @@ jobs:
 
       - name: Build and push to Cachix
         run: nix build .#deepseek-harness
+
+      - name: Check flake (validates module + declarative settings)
+        run: nix flake check
