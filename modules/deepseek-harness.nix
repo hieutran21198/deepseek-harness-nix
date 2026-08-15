@@ -57,6 +57,8 @@ let
     )
   )
   ++ cfg.extraArgs;
+
+  settingsFile = (pkgs.formats.yaml { }).generate "settings.yaml" cfg.settings;
 in
 {
   options.services.deepseek-harness = {
@@ -103,17 +105,69 @@ in
     };
 
     dshHome = mkOption {
-      type = types.nullOr types.str;
-      default = null;
+      type = types.str;
+      default = "${config.xdg.configHome}/deepseek-harness";
+      defaultText = "\${config.xdg.configHome}/deepseek-harness";
+      example = "~/.dsh";
       description = ''
-        Overrides the `DSH_HOME` directory used to store profiles and user
-        data. When null, the harness default (`~/.dsh`) is used.
+        The `DSH_HOME` directory used to store profiles, settings, and user
+        data. Defaults to an XDG config directory so the declarative
+        {option}`services.deepseek-harness.settings` document (written to
+        `settings.yaml` inside this directory) is picked up by the harness.
+      '';
+    };
+
+    environmentFiles = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      example = [
+        "/run/user/1000/secrets/dsh.env"
+      ];
+      description = ''
+        Environment files sourced into the service environment, typically
+        produced by sops-nix or agenix. On Linux these map to systemd's
+        `EnvironmentFile`; launchd has no native equivalent, so this option
+        is ignored on macOS.
+      '';
+    };
+
+    settings = mkOption {
+      type = types.attrs;
+      default = { };
+      example = lib.literalExpression ''
+        {
+          models = {
+            provider = "deepseek";
+            apiKey = "DEEPSEEK_API_KEY";
+          };
+          telemetry = { mode = "off"; };
+        }
+      '';
+      description = ''
+        Declarative harness settings, rendered to YAML and written to
+        `settings.yaml` inside {option}`services.deepseek-harness.dshHome`.
+        Top-level keys are setting namespaces (for example `models`,
+        `credentials`, `telemetry`). Secret values should be references to
+        environment-variable names (such as `DEEPSEEK_API_KEY`) supplied
+        through {option}`services.deepseek-harness.environmentFiles`.
+
+        The generated file is a read-only symlink into the Nix store, so
+        settings changed through the Web UI are not persisted and are reset
+        on the next activation.
       '';
     };
   };
 
   config = mkIf cfg.enable {
     home.packages = [ cfg.package ];
+
+    home.file."${cfg.dshHome}/settings.yaml" = mkIf (cfg.settings != { }) {
+      source = settingsFile;
+    };
+
+    warnings = optionals (cfg.environmentFiles != [ ] && pkgs.stdenv.hostPlatform.isDarwin) [
+      "services.deepseek-harness.environmentFiles is ignored on macOS: launchd does not support environment files."
+    ];
 
     systemd.user.services.deepseek-harness = {
       Unit = {
@@ -126,7 +180,8 @@ in
         ExecStart = command;
         Restart = "on-failure";
         RestartSec = 5;
-        Environment = optionals (cfg.dshHome != null) [ "DSH_HOME=${cfg.dshHome}" ];
+        Environment = [ "DSH_HOME=${cfg.dshHome}" ];
+        EnvironmentFile = cfg.environmentFiles;
       };
 
       Install = {
@@ -144,7 +199,7 @@ in
           SuccessfulExit = false;
         };
         ProcessType = "Interactive";
-        EnvironmentVariables = optionalAttrs (cfg.dshHome != null) {
+        EnvironmentVariables = {
           DSH_HOME = cfg.dshHome;
         };
       };
