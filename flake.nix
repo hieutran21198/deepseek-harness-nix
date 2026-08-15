@@ -99,8 +99,6 @@
         {
           default = deepseek-harness;
           deepseek-harness = deepseek-harness;
-        }
-        // nixpkgs.lib.optionalAttrs (nixpkgs.lib.hasSuffix "-linux" system) {
           deepseek-harness-desktop = pkgs.callPackage ./apps/desktop/desktop.nix {
             inherit deepseek-harness;
           };

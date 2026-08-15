@@ -10,7 +10,15 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            flake-check: true
+          - os: macos-14
+            flake-check: false
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -26,11 +34,12 @@ jobs:
           name: deepseek-harness-flake
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
 
-      - name: Build and push to Cachix
+      - name: Build CLI and push to Cachix
         run: nix build .#deepseek-harness
 
       - name: Build desktop app and push to Cachix
         run: nix build .#deepseek-harness-desktop
 
       - name: Check flake (validates module + declarative settings)
+        if: matrix.flake-check
         run: nix flake check

@@ -8,7 +8,7 @@ Nix flake packaging [DeepSeek Harness (`dsh`)](https://github.com/deepseek-ai/de
 | --- | --- |
 | `packages.<system>.deepseek-harness` | The `dsh` CLI, built from the published npm tarball via `buildNpmPackage`. |
 | `packages.<system>.default` | Alias for the above. |
-| `packages.<linux>.deepseek-harness-desktop` | Native desktop app (Tauri) wrapping the web UI. |
+| `packages.<system>.deepseek-harness-desktop` | Native desktop app (Tauri) wrapping the web UI (Linux + macOS). |
 | `nixosModules.default` | NixOS module defining `services.deepseek-harness`. |
 | `nixosModules.deepseek-harness` | Same module under an explicit name. |
 | `homeManagerModules.default` | Home-manager module defining `services.deepseek-harness`. |
@@ -18,7 +18,7 @@ Nix flake packaging [DeepSeek Harness (`dsh`)](https://github.com/deepseek-ai/de
 | `checks.<linux>.home-config-desktop` | Same, with the desktop app enabled. |
 | `checks.<linux>.nixos-config` | Evaluates a minimal NixOS config to validate the NixOS module. |
 
-Supported systems: `x86_64-linux`, `aarch64-linux`, `x86_64-darwin`, `aarch64-darwin`. CI builds and caches `x86_64-linux` only.
+Supported systems: `x86_64-linux`, `aarch64-linux`, `x86_64-darwin`, `aarch64-darwin`. CI builds and caches `x86_64-linux` and `aarch64-darwin`.
 
 ## Standalone usage
 
@@ -161,10 +161,11 @@ services.deepseek-harness = {
 
 The desktop app is a Tauri v2 shell that opens a native window at `http://<host>:<port>`:
 
-- If a `dsh web` server is already listening on that port (e.g. the `systemd` service), it **reuses** it.
+- If a `dsh web` server is already listening on that port (e.g. the `systemd`/`launchd` service), it **reuses** it.
 - Otherwise it spawns its own `dsh web` as a child and tears it down when the window closes.
 
-It is Linux-only (`webkitgtk`), and the wrapper sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` to avoid a WebKitGTK crash on Wayland compositors.
+- **Linux** — installs an app-menu entry (`deepseek-harness.desktop`) plus a hicolor icon. The wrapper sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` to avoid a WebKitGTK crash on Wayland compositors.
+- **macOS** — installs `DeepSeek Harness.app` into `~/Applications`. It uses the module's default `host`/`port` (`127.0.0.1:3080`); to use custom values on macOS, override `DSH_HOST`/`DSH_PORT` in your environment.
 
 You can also run it directly without home-manager:
 
@@ -200,7 +201,7 @@ Builds are pushed to the [Cachix](https://cachix.org) cache `deepseek-harness-fl
 Two GitHub Actions workflows live under `.github/workflows/`:
 
 - **`update.yml`** — runs hourly (and on `workflow_dispatch`). It polls the npm registry for a newer `@deepseek-ai/dsh`, regenerates `package-lock.json`, recomputes both SRI hashes, verifies the build, and commits/pushes to `main` if anything changed.
-- **`build.yml`** — runs on push to `main`, pull requests, and daily. It builds `x86_64-linux` (both the CLI and the desktop app), pushes the results to Cachix, and runs `nix flake check` (which validates the home-manager module, declarative `settings`, the desktop app, and the NixOS module).
+- **`build.yml`** — runs on push to `main`, pull requests, and daily. It builds on `ubuntu-latest` (`x86_64-linux`) and `macos-14` (`aarch64-darwin`) — both the CLI and the desktop app — pushes the results to Cachix, and (on Linux) runs `nix flake check` (validating the home-manager module, declarative `settings`, the desktop app, and the NixOS module).
 
 ### Required secrets
 

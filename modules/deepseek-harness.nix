@@ -7,6 +7,7 @@
 
 let
   cfg = config.services.deepseek-harness;
+  isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
 
   inherit (lib)
     concatLists
@@ -230,10 +231,11 @@ in
     (mkIf cfg.desktop.enable {
       home.packages = [ cfg.desktop.package ];
 
-      xdg.dataFile."icons/hicolor/scalable/apps/deepseek-harness.svg".source =
-        ../assets/deepseek-harness.svg;
+      xdg.dataFile."icons/hicolor/scalable/apps/deepseek-harness.svg" = mkIf (!isDarwin) {
+        source = ../assets/deepseek-harness.svg;
+      };
 
-      xdg.desktopEntries.deepseek-harness = {
+      xdg.desktopEntries.deepseek-harness = mkIf (!isDarwin) {
         name = "DeepSeek Harness";
         genericName = "Agent Harness";
         comment = "Open the DeepSeek Harness web UI";
@@ -243,6 +245,11 @@ in
         categories = [
           "Office"
         ];
+      };
+
+      home.file."Applications/DeepSeek Harness.app" = mkIf isDarwin {
+        source = "${cfg.desktop.package}/Applications/DeepSeek Harness.app";
+        recursive = true;
       };
     })
   ];
