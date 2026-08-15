@@ -1,6 +1,6 @@
 # deepseek-harness-nix
 
-Nix flake packaging [DeepSeek Harness (`dsh`)](https://github.com/deepseek-ai/deepseek-harness) — an open-source agent harness where "everything is a plugin" — and exposing it as a home-manager service module.
+Nix flake packaging [DeepSeek Harness (`dsh`)](https://github.com/deepseek-ai/deepseek-harness) — an open-source agent harness where "everything is a plugin" — and exposing it as both a NixOS and a home-manager service module.
 
 ## What's provided
 
@@ -9,11 +9,14 @@ Nix flake packaging [DeepSeek Harness (`dsh`)](https://github.com/deepseek-ai/de
 | `packages.<system>.deepseek-harness` | The `dsh` CLI, built from the published npm tarball via `buildNpmPackage`. |
 | `packages.<system>.default` | Alias for the above. |
 | `packages.<linux>.deepseek-harness-desktop` | Native desktop app (Tauri) wrapping the web UI. |
+| `nixosModules.default` | NixOS module defining `services.deepseek-harness`. |
+| `nixosModules.deepseek-harness` | Same module under an explicit name. |
 | `homeManagerModules.default` | Home-manager module defining `services.deepseek-harness`. |
 | `homeManagerModules.deepseek-harness` | Same module under an explicit name. |
 | `devShells.<system>.default` | Shell with `nodejs`, `prefetch-npm-deps`, and `jq` (for running the updater). |
 | `checks.<system>.home-config` | Builds a sample home-manager config to validate the module + `settings`. |
 | `checks.<linux>.home-config-desktop` | Same, with the desktop app enabled. |
+| `checks.<linux>.nixos-config` | Evaluates a minimal NixOS config to validate the NixOS module. |
 
 Supported systems: `x86_64-linux`, `aarch64-linux`, `x86_64-darwin`, `aarch64-darwin`. CI builds and caches `x86_64-linux` only.
 
@@ -30,6 +33,55 @@ nix shell github:hieutran21198/deepseek-harness-nix --command dsh web
 ```
 
 The web UI is served at `http://127.0.0.1:3080` by default.
+
+## NixOS module
+
+```nix
+# flake.nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    deepseek-harness.url = "github:hieutran21198/deepseek-harness-nix";
+  };
+
+  outputs = { nixpkgs, deepseek-harness, ... }: {
+    nixosConfigurations.yourhost = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        deepseek-harness.nixosModules.default
+        {
+          services.deepseek-harness = {
+            enable = true;
+            # host = "0.0.0.0";
+            # port = 3080;
+            # openFirewall = true;
+            # environmentFiles = [ "/run/secrets/deepseek-harness.env" ];
+            settings = {
+              models = {
+                provider = "deepseek";
+                apiKey = "DEEPSEEK_API_KEY";
+              };
+            };
+          };
+        }
+      ];
+    };
+  };
+}
+```
+
+Then:
+
+```bash
+sudo nixos-rebuild switch
+systemctl status deepseek-harness
+```
+
+The NixOS module runs `dsh web` as a systemd service under a dynamically allocated user (`DynamicUser`), with a state directory at `/var/lib/deepseek-harness` (the `dshHome` default). It supports the same options as the home-manager module — `host`, `port`, `trustedHosts`, `extraArgs`, `dshHome`, `environmentFiles`, `settings` — plus:
+
+- **`openFirewall`** — open the web UI port in `networking.firewall` (default: `false`).
+
+The service is hardened (`NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`). The desktop app is not part of the NixOS module — that is a per-user concern handled by the home-manager module.
 
 ## Home-manager module
 
@@ -148,7 +200,7 @@ Builds are pushed to the [Cachix](https://cachix.org) cache `deepseek-harness-fl
 Two GitHub Actions workflows live under `.github/workflows/`:
 
 - **`update.yml`** — runs hourly (and on `workflow_dispatch`). It polls the npm registry for a newer `@deepseek-ai/dsh`, regenerates `package-lock.json`, recomputes both SRI hashes, verifies the build, and commits/pushes to `main` if anything changed.
-- **`build.yml`** — runs on push to `main`, pull requests, and daily. It builds `x86_64-linux` (both the CLI and the desktop app), pushes the results to Cachix, and runs `nix flake check` (which builds sample home-manager configs, validating the module, declarative `settings`, and the desktop app).
+- **`build.yml`** — runs on push to `main`, pull requests, and daily. It builds `x86_64-linux` (both the CLI and the desktop app), pushes the results to Cachix, and runs `nix flake check` (which validates the home-manager module, declarative `settings`, the desktop app, and the NixOS module).
 
 ### Required secrets
 

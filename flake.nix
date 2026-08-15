@@ -1,5 +1,5 @@
 {
-  description = "Nix flake providing the deepseek-harness (dsh) package and a home-manager service module";
+  description = "Nix flake providing the deepseek-harness (dsh) package plus NixOS and home-manager service modules";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -63,6 +63,31 @@
             }
           ];
         };
+
+      # A minimal NixOS evaluation used by `checks` to validate the
+      # nixosModules entry. Only a lightweight attribute is forced so the
+      # check stays cheap (forcing the whole `toplevel` closure is slow).
+      exampleNixosConfig =
+        system:
+        (nixpkgs.lib.nixosSystem {
+          inherit system;
+          modules = [
+            self.nixosModules.default
+            {
+              boot.isContainer = true;
+              system.stateVersion = "25.05";
+              services.deepseek-harness = {
+                enable = true;
+                settings = {
+                  models = {
+                    provider = "deepseek";
+                    apiKey = "DEEPSEEK_API_KEY";
+                  };
+                };
+              };
+            }
+          ];
+        }).config.systemd.services.deepseek-harness.serviceConfig.ExecStart;
     in
     {
       packages = forAllSystems (
@@ -84,11 +109,18 @@
 
       checks = forAllSystems (
         system:
+        let
+          pkgs = import nixpkgs { inherit system; };
+        in
         {
           home-config = (exampleHomeConfig system false).activationPackage;
         }
         // nixpkgs.lib.optionalAttrs (nixpkgs.lib.hasSuffix "-linux" system) {
           home-config-desktop = (exampleHomeConfig system true).activationPackage;
+          nixos-config = pkgs.runCommand "deepseek-harness-nixos-module-check" { } ''
+            # Forces the NixOS module to evaluate (without building a full system).
+            printf '%s\n' ${nixpkgs.lib.escapeShellArg (toString (exampleNixosConfig system))} > "$out"
+          '';
         }
       );
 
@@ -130,6 +162,25 @@
             services.deepseek-harness.desktop.package =
               lib.mkIf (lib.hasSuffix "-linux" pkgs.stdenv.hostPlatform.system)
                 (lib.mkDefault (self.packages.${pkgs.stdenv.hostPlatform.system}.deepseek-harness-desktop));
+          };
+      };
+
+      nixosModules = {
+        default =
+          { pkgs, lib, ... }:
+          {
+            imports = [ (import ./modules/nixos/deepseek-harness.nix) ];
+            services.deepseek-harness.package = lib.mkDefault (
+              self.packages.${pkgs.stdenv.hostPlatform.system}.deepseek-harness
+            );
+          };
+        deepseek-harness =
+          { pkgs, lib, ... }:
+          {
+            imports = [ (import ./modules/nixos/deepseek-harness.nix) ];
+            services.deepseek-harness.package = lib.mkDefault (
+              self.packages.${pkgs.stdenv.hostPlatform.system}.deepseek-harness
+            );
           };
       };
     };
