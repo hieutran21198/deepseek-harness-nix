@@ -139,6 +139,32 @@ in
   };
 
   config = mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = hasPrefix "/var/lib/" cfg.dshHome;
+        message = ''
+          services.deepseek-harness.dshHome must be under /var/lib/ so the
+          dynamic service user can write to it via systemd StateDirectory
+          (got `${cfg.dshHome}`).
+        '';
+      }
+      {
+        assertion = cfg.port == 0 || cfg.port >= 1024;
+        message = ''
+          services.deepseek-harness.port must be 0 or >= 1024: the service
+          runs as an unprivileged dynamic user and cannot bind privileged
+          ports.
+        '';
+      }
+      {
+        assertion = !cfg.openFirewall || cfg.port != 0;
+        message = ''
+          services.deepseek-harness.openFirewall requires a fixed port
+          (`services.deepseek-harness.port` must not be 0).
+        '';
+      }
+    ];
+
     networking.firewall.allowedTCPPorts = mkIf cfg.openFirewall [ cfg.port ];
 
     systemd.services.deepseek-harness = {

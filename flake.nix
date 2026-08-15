@@ -146,9 +146,9 @@
             services.deepseek-harness.package = lib.mkDefault (
               self.packages.${pkgs.stdenv.hostPlatform.system}.deepseek-harness
             );
-            services.deepseek-harness.desktop.package =
-              lib.mkIf (lib.hasSuffix "-linux" pkgs.stdenv.hostPlatform.system)
-                (lib.mkDefault (self.packages.${pkgs.stdenv.hostPlatform.system}.deepseek-harness-desktop));
+            services.deepseek-harness.desktop.package = lib.mkDefault (
+              self.packages.${pkgs.stdenv.hostPlatform.system}.deepseek-harness-desktop
+            );
           };
         deepseek-harness =
           { pkgs, lib, ... }:
@@ -157,9 +157,9 @@
             services.deepseek-harness.package = lib.mkDefault (
               self.packages.${pkgs.stdenv.hostPlatform.system}.deepseek-harness
             );
-            services.deepseek-harness.desktop.package =
-              lib.mkIf (lib.hasSuffix "-linux" pkgs.stdenv.hostPlatform.system)
-                (lib.mkDefault (self.packages.${pkgs.stdenv.hostPlatform.system}.deepseek-harness-desktop));
+            services.deepseek-harness.desktop.package = lib.mkDefault (
+              self.packages.${pkgs.stdenv.hostPlatform.system}.deepseek-harness-desktop
+            );
           };
       };
 
