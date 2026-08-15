@@ -8,10 +8,12 @@ Nix flake packaging [DeepSeek Harness (`dsh`)](https://github.com/deepseek-ai/de
 | --- | --- |
 | `packages.<system>.deepseek-harness` | The `dsh` CLI, built from the published npm tarball via `buildNpmPackage`. |
 | `packages.<system>.default` | Alias for the above. |
+| `packages.<linux>.deepseek-harness-desktop` | Native desktop app (Tauri) wrapping the web UI. |
 | `homeManagerModules.default` | Home-manager module defining `services.deepseek-harness`. |
 | `homeManagerModules.deepseek-harness` | Same module under an explicit name. |
 | `devShells.<system>.default` | Shell with `nodejs`, `prefetch-npm-deps`, and `jq` (for running the updater). |
 | `checks.<system>.home-config` | Builds a sample home-manager config to validate the module + `settings`. |
+| `checks.<linux>.home-config-desktop` | Same, with the desktop app enabled. |
 
 Supported systems: `x86_64-linux`, `aarch64-linux`, `x86_64-darwin`, `aarch64-darwin`. CI builds and caches `x86_64-linux` only.
 
@@ -91,8 +93,32 @@ The module manages:
 - **`dshHome`** — the `DSH_HOME` directory (default: `${config.xdg.configHome}/deepseek-harness`).
 - **`environmentFiles`** — environment files sourced into the service (systemd `EnvironmentFile`; ignored on macOS).
 - **`settings`** — declarative harness settings (see below).
+- **`desktop.enable`** — install the native desktop app + a `.desktop` entry (see below).
+- **`desktop.package`** — the desktop package (defaults to this flake's build).
 
 On Linux it creates a `systemd` user service; on macOS a `launchd` agent. Enabling it also adds `dsh` to `home.packages`.
+
+### Desktop app
+
+```nix
+services.deepseek-harness = {
+  enable = true;
+  desktop.enable = true;   # Tauri window + "DeepSeek Harness" app-menu entry
+};
+```
+
+The desktop app is a Tauri v2 shell that opens a native window at `http://<host>:<port>`:
+
+- If a `dsh web` server is already listening on that port (e.g. the `systemd` service), it **reuses** it.
+- Otherwise it spawns its own `dsh web` as a child and tears it down when the window closes.
+
+It is Linux-only (`webkitgtk`), and the wrapper sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` to avoid a WebKitGTK crash on Wayland compositors.
+
+You can also run it directly without home-manager:
+
+```bash
+nix run github:hieutran21198/deepseek-harness-nix#deepseek-harness-desktop
+```
 
 ### Declarative settings
 
@@ -122,7 +148,7 @@ Builds are pushed to the [Cachix](https://cachix.org) cache `deepseek-harness-fl
 Two GitHub Actions workflows live under `.github/workflows/`:
 
 - **`update.yml`** — runs hourly (and on `workflow_dispatch`). It polls the npm registry for a newer `@deepseek-ai/dsh`, regenerates `package-lock.json`, recomputes both SRI hashes, verifies the build, and commits/pushes to `main` if anything changed.
-- **`build.yml`** — runs on push to `main`, pull requests, and daily. It builds `x86_64-linux`, pushes the result to Cachix, and runs `nix flake check` (which builds a sample home-manager config, validating the module and any declarative `settings`).
+- **`build.yml`** — runs on push to `main`, pull requests, and daily. It builds `x86_64-linux` (both the CLI and the desktop app), pushes the results to Cachix, and runs `nix flake check` (which builds sample home-manager configs, validating the module, declarative `settings`, and the desktop app).
 
 ### Required secrets
 

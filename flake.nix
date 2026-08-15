@@ -35,9 +35,10 @@
       mkPackage = system: (import nixpkgs { inherit system; }).callPackage ./package.nix { };
 
       # A sample home-manager configuration used by `checks` to validate that
-      # the module (including declarative `settings`) evaluates and builds.
+      # the module (including declarative `settings` and, on Linux, the
+      # desktop app) evaluates and builds.
       exampleHomeConfig =
-        system:
+        system: enableDesktop:
         home-manager.lib.homeManagerConfiguration {
           pkgs = import nixpkgs { inherit system; };
           modules = [
@@ -48,6 +49,7 @@
               home.stateVersion = "25.05";
               services.deepseek-harness = {
                 enable = true;
+                desktop.enable = enableDesktop;
                 settings = {
                   models = {
                     provider = "deepseek";
@@ -66,17 +68,29 @@
       packages = forAllSystems (
         system:
         let
+          pkgs = import nixpkgs { inherit system; };
           deepseek-harness = mkPackage system;
         in
         {
           default = deepseek-harness;
           deepseek-harness = deepseek-harness;
         }
+        // nixpkgs.lib.optionalAttrs (nixpkgs.lib.hasSuffix "-linux" system) {
+          deepseek-harness-desktop = pkgs.callPackage ./apps/desktop/desktop.nix {
+            inherit deepseek-harness;
+          };
+        }
       );
 
-      checks = forAllSystems (system: {
-        home-config = (exampleHomeConfig system).activationPackage;
-      });
+      checks = forAllSystems (
+        system:
+        {
+          home-config = (exampleHomeConfig system false).activationPackage;
+        }
+        // nixpkgs.lib.optionalAttrs (nixpkgs.lib.hasSuffix "-linux" system) {
+          home-config-desktop = (exampleHomeConfig system true).activationPackage;
+        }
+      );
 
       devShells = forAllSystems (
         system:
@@ -102,6 +116,9 @@
             services.deepseek-harness.package = lib.mkDefault (
               self.packages.${pkgs.stdenv.hostPlatform.system}.deepseek-harness
             );
+            services.deepseek-harness.desktop.package =
+              lib.mkIf (lib.hasSuffix "-linux" pkgs.stdenv.hostPlatform.system)
+                (lib.mkDefault (self.packages.${pkgs.stdenv.hostPlatform.system}.deepseek-harness-desktop));
           };
         deepseek-harness =
           { pkgs, lib, ... }:
@@ -110,6 +127,9 @@
             services.deepseek-harness.package = lib.mkDefault (
               self.packages.${pkgs.stdenv.hostPlatform.system}.deepseek-harness
             );
+            services.deepseek-harness.desktop.package =
+              lib.mkIf (lib.hasSuffix "-linux" pkgs.stdenv.hostPlatform.system)
+                (lib.mkDefault (self.packages.${pkgs.stdenv.hostPlatform.system}.deepseek-harness-desktop));
           };
       };
     };

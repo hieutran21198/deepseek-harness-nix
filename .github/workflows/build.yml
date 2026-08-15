@@ -29,5 +29,8 @@ jobs:
       - name: Build and push to Cachix
         run: nix build .#deepseek-harness
 
+      - name: Build desktop app and push to Cachix
+        run: nix build .#deepseek-harness-desktop
+
       - name: Check flake (validates module + declarative settings)
         run: nix flake check

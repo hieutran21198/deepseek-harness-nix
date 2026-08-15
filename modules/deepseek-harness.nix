@@ -10,13 +10,15 @@ let
 
   inherit (lib)
     concatLists
+    escapeShellArg
+    escapeShellArgs
     getExe
     mkEnableOption
     mkIf
+    mkMerge
     mkOption
     optionalAttrs
     optionals
-    escapeShellArgs
     types
     ;
 
@@ -59,6 +61,12 @@ let
   ++ cfg.extraArgs;
 
   settingsFile = (pkgs.formats.yaml { }).generate "settings.yaml" cfg.settings;
+
+  desktopLauncher = pkgs.writeShellScript "deepseek-harness-desktop" ''
+    export DSH_HOST=${escapeShellArg cfg.host}
+    export DSH_PORT=${toString cfg.port}
+    exec ${getExe cfg.desktop.package}
+  '';
 in
 {
   options.services.deepseek-harness = {
@@ -156,53 +164,86 @@ in
         on the next activation.
       '';
     };
-  };
 
-  config = mkIf cfg.enable {
-    home.packages = [ cfg.package ];
+    desktop = {
+      enable = mkEnableOption "the DeepSeek Harness desktop application (a Tauri window wrapping the web UI)";
 
-    home.file."${cfg.dshHome}/settings.yaml" = mkIf (cfg.settings != { }) {
-      source = settingsFile;
-    };
-
-    warnings = optionals (cfg.environmentFiles != [ ] && pkgs.stdenv.hostPlatform.isDarwin) [
-      "services.deepseek-harness.environmentFiles is ignored on macOS: launchd does not support environment files."
-    ];
-
-    systemd.user.services.deepseek-harness = {
-      Unit = {
-        Description = "DeepSeek Harness web UI";
-        After = [ "network.target" ];
-        Wants = [ "network.target" ];
-      };
-
-      Service = {
-        ExecStart = command;
-        Restart = "on-failure";
-        RestartSec = 5;
-        Environment = [ "DSH_HOME=${cfg.dshHome}" ];
-        EnvironmentFile = cfg.environmentFiles;
-      };
-
-      Install = {
-        WantedBy = [ "default.target" ];
-      };
-    };
-
-    launchd.agents.deepseek-harness = {
-      enable = true;
-      config = {
-        Label = "deepseek-harness";
-        ProgramArguments = launchdArgs;
-        RunAtLoad = true;
-        KeepAlive = {
-          SuccessfulExit = false;
-        };
-        ProcessType = "Interactive";
-        EnvironmentVariables = {
-          DSH_HOME = cfg.dshHome;
-        };
+      package = mkOption {
+        type = types.package;
+        # No default here: the flake's homeManagerModules entry injects the
+        # matching package via lib.mkDefault. When importing this module
+        # directly, set this option explicitly.
+        description = "The deepseek-harness desktop package to use.";
       };
     };
   };
+
+  config = mkMerge [
+    (mkIf cfg.enable {
+      home.packages = [ cfg.package ];
+
+      home.file."${cfg.dshHome}/settings.yaml" = mkIf (cfg.settings != { }) {
+        source = settingsFile;
+      };
+
+      warnings = optionals (cfg.environmentFiles != [ ] && pkgs.stdenv.hostPlatform.isDarwin) [
+        "services.deepseek-harness.environmentFiles is ignored on macOS: launchd does not support environment files."
+      ];
+
+      systemd.user.services.deepseek-harness = {
+        Unit = {
+          Description = "DeepSeek Harness web UI";
+          After = [ "network.target" ];
+          Wants = [ "network.target" ];
+        };
+
+        Service = {
+          ExecStart = command;
+          Restart = "on-failure";
+          RestartSec = 5;
+          Environment = [ "DSH_HOME=${cfg.dshHome}" ];
+          EnvironmentFile = cfg.environmentFiles;
+        };
+
+        Install = {
+          WantedBy = [ "default.target" ];
+        };
+      };
+
+      launchd.agents.deepseek-harness = {
+        enable = true;
+        config = {
+          Label = "deepseek-harness";
+          ProgramArguments = launchdArgs;
+          RunAtLoad = true;
+          KeepAlive = {
+            SuccessfulExit = false;
+          };
+          ProcessType = "Interactive";
+          EnvironmentVariables = {
+            DSH_HOME = cfg.dshHome;
+          };
+        };
+      };
+    })
+
+    (mkIf cfg.desktop.enable {
+      home.packages = [ cfg.desktop.package ];
+
+      xdg.dataFile."icons/hicolor/scalable/apps/deepseek-harness.svg".source =
+        ../assets/deepseek-harness.svg;
+
+      xdg.desktopEntries.deepseek-harness = {
+        name = "DeepSeek Harness";
+        genericName = "Agent Harness";
+        comment = "Open the DeepSeek Harness web UI";
+        exec = "${desktopLauncher}";
+        icon = "deepseek-harness";
+        terminal = false;
+        categories = [
+          "Office"
+        ];
+      };
+    })
+  ];
 }
