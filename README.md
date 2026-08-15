@@ -164,7 +164,7 @@ The desktop app is a Tauri v2 shell that opens a native window at `http://<host>
 - If a `dsh web` server is already listening on that port (e.g. the `systemd`/`launchd` service), it **reuses** it.
 - Otherwise it spawns its own `dsh web` as a child and tears it down when the window closes.
 
-- **Linux** — installs an app-menu entry (`deepseek-harness.desktop`) plus a hicolor icon. The wrapper sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` to avoid a WebKitGTK crash on Wayland compositors.
+- **Linux** — installs an app-menu entry (`deepseek-harness.desktop`) plus a hicolor icon. The wrapper sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` and `WEBKIT_DISABLE_COMPOSITING_MODE=1` to work around WebKitGTK rendering failures (blank/white windows, text-only rendering) on Wayland compositors, notably KDE Plasma + NVIDIA. If the window still renders blank, also try `GDK_BACKEND=x11` in your environment.
 - **macOS** — installs `DeepSeek Harness.app` into `~/Applications`. It uses the module's default `host`/`port` (`127.0.0.1:3080`); to use custom values on macOS, override `DSH_HOST`/`DSH_PORT` in your environment.
 
 You can also run it directly without home-manager:

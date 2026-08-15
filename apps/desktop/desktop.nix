@@ -65,7 +65,9 @@ rustPlatform.buildRustPackage {
   postInstall = ''
     wrapProgram "$out/bin/deepseek-harness-desktop" \
       --set DSH_BIN "${deepseek-harness}/bin/dsh" \
-      ${lib.optionalString (!isDarwin) "--set WEBKIT_DISABLE_DMABUF_RENDERER 1"}
+      ${lib.optionalString (
+        !isDarwin
+      ) "--set WEBKIT_DISABLE_DMABUF_RENDERER 1 --set WEBKIT_DISABLE_COMPOSITING_MODE 1"}
 
     ${lib.optionalString isDarwin ''
         app="$out/Applications/DeepSeek Harness.app"
