@@ -7,9 +7,9 @@
 }:
 
 let
-  version = "0.1.0-rc.6";
-  srcHash = "sha256-G4qaCtPH/q7OR5JuC9N8oVHHzPqZeVOvpf0BJheE6tw=";
-  npmDepsHash = "sha256-Xj1QjcVA8ARF0DHt0uCY8GrfxCJUl4L3ds6p+yfZSf0=";
+  version = "0.1.0-rc.7";
+  srcHash = "sha256-L48Ldj1hGsU296lBHuQ8CvwGfBuHMsMQLATb45i8rMU=";
+  npmDepsHash = "sha256-Vnz2GFUnEELHBKdvZlTWm3lPvaHCwDPSZeDyb2npjn8=";
 in
 buildNpmPackage {
   pname = "deepseek-harness";
